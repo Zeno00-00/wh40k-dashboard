@@ -1,0 +1,12 @@
+{
+  "name": "Warhammer 40k Detachment & Mission Dashboard",
+  "short_name": "40k Missions",
+  "description": "Warhammer 40,000 11th edition detachment & primary mission lookup",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0c0b09",
+  "theme_color": "#0c0b09",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

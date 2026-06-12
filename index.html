@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0c0b09">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="40k Missions">
+<meta name="description" content="Warhammer 40,000 11th edition detachment &amp; primary mission dashboard — pick both force dispositions and see each player's primary mission card.">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<title>Warhammer 40k 11th Edition — Detachment &amp; Mission Dashboard</title>
+<style>
+  :root {
+    --bg: #0c0b09;
+    --panel: #16140f;
+    --panel-2: #1d1a14;
+    --border: #2e2a20;
+    --gold: #c9a84c;
+    --gold-dim: #8a7434;
+    --text: #d6d2c8;
+    --muted: #8d887c;
+    /* disposition colors */
+    --c-tah: #c9a84c;   /* Take and Hold — gold */
+    --c-ptf: #c0504a;   /* Purge the Foe — red */
+    --c-dis: #9a6bbf;   /* Disruption — purple */
+    --c-rec: #6fa86a;   /* Reconnaissance — green */
+    --c-pa:  #5e8fb8;   /* Priority Assets — blue */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Georgia, "Times New Roman", serif;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.35rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 4px;
+    font-weight: 600;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0 0 22px;
+    letter-spacing: 0.04em;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1.2fr 2fr;
+    grid-template-areas:
+      "faction right"
+      "table   right";
+    grid-template-rows: auto 1fr;
+    gap: 24px;
+    align-items: start;
+    max-width: 1280px;
+  }
+  .faction-area { grid-area: faction; }
+  .table-wrap { grid-area: table; }
+  .right { grid-area: right; }
+  label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold-dim);
+    margin-bottom: 6px;
+  }
+  select {
+    width: 100%;
+    padding: 12px;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 1rem; /* >=16px prevents iOS focus auto-zoom */
+    cursor: pointer;
+  }
+  select:focus { outline: 1px solid var(--gold-dim); }
+
+  /* right side: nested grid so cards sit under dropdowns 2 & 3 */
+  .right {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 24px;
+    align-items: start;
+  }
+  .matchup-note {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.92rem;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 0;
+  }
+  .matchup-note strong { color: var(--gold); font-style: normal; }
+  .mission-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    text-align: center;
+  }
+  .mission-card .who {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold-dim);
+    margin-bottom: 4px;
+  }
+  .mission-card .mission-name {
+    font-size: 1.1rem;
+    color: var(--gold);
+    margin-bottom: 10px;
+  }
+  .mission-card img {
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    display: block;
+    background: var(--panel-2);
+    min-height: 120px;
+  }
+  .mission-card .img-error {
+    display: none;
+    padding: 30px 10px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+  }
+
+  /* detachment table */
+  .table-wrap {
+    margin-top: -8px; /* tighten the 24px grid gap under the faction dropdown */
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  th {
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold-dim);
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+    font-weight: 600;
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(46, 42, 32, 0.5);
+  }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: rgba(201, 168, 76, 0.07); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.dp { text-align: center; color: var(--muted); }
+  th.dp { text-align: center; }
+  .pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .pill.tah { color: var(--c-tah); border-color: var(--c-tah); background: rgba(201,168,76,0.10); }
+  .pill.ptf { color: var(--c-ptf); border-color: var(--c-ptf); background: rgba(192,80,74,0.10); }
+  .pill.dis { color: var(--c-dis); border-color: var(--c-dis); background: rgba(154,107,191,0.10); }
+  .pill.rec { color: var(--c-rec); border-color: var(--c-rec); background: rgba(111,168,106,0.10); }
+  .pill.pa  { color: var(--c-pa);  border-color: var(--c-pa);  background: rgba(94,143,184,0.10); }
+
+  @media (max-width: 700px) {
+    body { padding: 16px; }
+    /* missions above the long detachment table on phones */
+    .layout {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "faction"
+        "right"
+        "table";
+      grid-template-rows: auto;
+    }
+    .right { grid-template-columns: 1fr; }
+    .matchup-note { grid-column: 1; }
+    .table-wrap { margin-top: 0; }
+  }
+</style>
+</head>
+<body>
+  <h1>Detachment &amp; Mission Dashboard</h1>
+  <p class="subtitle">Warhammer 40,000 — 11th Edition &middot; Chapter Approved 2026</p>
+
+  <div class="layout">
+    <div class="faction-area">
+      <label for="faction">Faction</label>
+      <select id="faction"></select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Detachment</th><th class="dp">DP</th><th>Force Disposition</th></tr>
+        </thead>
+        <tbody id="detachment-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="right">
+      <div>
+        <label for="your-disp">Your Force Disposition</label>
+        <select id="your-disp"></select>
+      </div>
+      <div>
+        <label for="opp-disp">Opponent's Force Disposition</label>
+        <select id="opp-disp"></select>
+      </div>
+
+      <div class="matchup-note" id="matchup-note"></div>
+
+      <div class="mission-card">
+        <div class="who">Your Primary Mission</div>
+        <div class="mission-name" id="your-mission-name"></div>
+        <img id="your-mission-img" alt="Your primary mission card">
+        <div class="img-error" id="your-img-error">Card image unavailable</div>
+      </div>
+      <div class="mission-card">
+        <div class="who">Opponent's Primary Mission</div>
+        <div class="mission-name" id="opp-mission-name"></div>
+        <img id="opp-mission-img" alt="Opponent's primary mission card">
+        <div class="img-error" id="opp-img-error">Card image unavailable</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const DISPOSITIONS = ["Take and Hold", "Purge the Foe", "Disruption", "Reconnaissance", "Priority Assets"];
+
+// MATRIX[yourDisp][oppDisp] = mission YOU play
+const MATRIX = {
+  "Take and Hold":   { "Take and Hold": "Battlefield Dominance", "Purge the Foe": "Immovable Object", "Disruption": "Determined Acquisition", "Reconnaissance": "Purge and Secure",     "Priority Assets": "Inescapable Dominion" },
+  "Purge the Foe":   { "Take and Hold": "Unstoppable Force",     "Purge the Foe": "Meatgrinder",      "Disruption": "Punishment",             "Reconnaissance": "Consecrate",           "Priority Assets": "Destroyer's Wrath" },
+  "Disruption":      { "Take and Hold": "Death Trap",            "Purge the Foe": "Delaying Action",  "Disruption": "Outmanoeuvre",           "Reconnaissance": "Smoke and Mirrors",    "Priority Assets": "Locate and Deny" },
+  "Reconnaissance":  { "Take and Hold": "Reconnaissance Sweep",  "Purge the Foe": "Triangulation",    "Disruption": "Surveil the Foe",        "Reconnaissance": "Gather Intel",         "Priority Assets": "Search and Scour" },
+  "Priority Assets": { "Take and Hold": "Secure Asset",          "Purge the Foe": "Vital Link",       "Disruption": "Extract Relic",          "Reconnaissance": "Vanguard Operation",   "Priority Assets": "Sabotage" }
+};
+
+const FACTIONS = {
+  "Adepta Sororitas": [["Chorus of Condemnation",1,"Reconnaissance"],["Sacred Champions",1,"Take and Hold"],["Sanctified Orators",1,"Purge the Foe"],["Army of Faith",2,"Take and Hold"],["Champions of Faith",2,"Disruption"],["Penitent Host",2,"Take and Hold"],["Bringers of Flame",3,"Purge the Foe"],["Hallowed Martyrs",3,"Priority Assets"]],
+  "Adeptus Custodes": [["Might of the Moritoi",1,"Purge the Foe"],["Silent Hunters",1,"Reconnaissance"],["Tharanatoi Hammerblow",1,"Priority Assets"],["Auric Champions",2,"Priority Assets"],["Lions of the Emperor",2,"Disruption"],["Null Maiden Vigil",2,"Reconnaissance"],["Shield Host",2,"Purge the Foe"],["Solar Spearhead",2,"Take and Hold"],["Talons of the Emperor",3,"Take and Hold"]],
+  "Adeptus Mechanicus": [["Cohort Acquisitus",1,"Reconnaissance"],["Lords of the Forge",1,"Priority Assets"],["Luminen Auto-Choir",1,"Disruption"],["Cohort Cybernetica",2,"Take and Hold"],["Data-psalm Conclave",2,"Disruption"],["Explorator Maniple",2,"Priority Assets"],["Rad-zone Corps",2,"Take and Hold"],["Skitarii Hunter Cohort",2,"Reconnaissance"],["Eradication Cohort",3,"Purge the Foe"],["Haloscreed Battle Clade",3,"Purge the Foe"]],
+  "Aeldari": [["Armoured Warhost",1,"Reconnaissance"],["Fateful Performance",1,"Disruption"],["Path of the Outcast",1,"Reconnaissance"],["Twilight Flickers",1,"Take and Hold"],["Corsair Coterie",2,"Priority Assets"],["Devoted of Ynnead",2,"Priority Assets"],["Eldritch Raiders",2,"Disruption"],["Ghosts of the Webway",2,"Disruption"],["Guardian Battlehost",2,"Take and Hold"],["Seer Council",2,"Priority Assets"],["Serpent's Brood",2,"Purge the Foe"],["Spirit Conclave",2,"Take and Hold"],["Windrider Host",2,"Disruption"],["Aspect Host",3,"Disruption"],["Warhost",3,"Purge the Foe"]],
+  "Astra Militarum": [["Abhuman Auxiliaries",1,"Take and Hold"],["Bridgehead Strike",1,"Priority Assets"],["Designation Force",1,"Reconnaissance"],["Armoured Infantry",2,"Take and Hold"],["Hammer of the Emperor",2,"Purge the Foe"],["Mechanised Assault",2,"Purge the Foe"],["Siege Regiment",2,"Disruption"],["Steel Hammer",2,"Purge the Foe"],["Combined Arms",3,"Take and Hold"],["Grizzled Company",3,"Priority Assets"],["Recon Element",3,"Reconnaissance"]],
+  "Black Templars": [["Marshal's Household",1,"Priority Assets"],["The Living Miracle",1,"Purge the Foe"],["Wrathful Procession",1,"Take and Hold"],["Companions of Vehemence",2,"Purge the Foe"],["Godhammer Assault Force",2,"Disruption"],["Vindication Task Force",2,"Priority Assets"]],
+  "Blood Angels": [["Encarmine Speartip",1,"Disruption"],["Legacy of Grace",1,"Priority Assets"],["Wrath of the Doomed",1,"Purge the Foe"],["The Angelic Host",2,"Disruption"],["The Lost Brethren",2,"Purge the Foe"],["Angelic Inheritors",3,"Priority Assets"],["Liberator Assault Group",3,"Take and Hold"],["Rage-cursed Onslaught",3,"Purge the Foe"]],
+  "Chaos Daemons": [["Cavalcade of Chaos",1,"Disruption"],["Lords of the Warp",1,"Purge the Foe"],["Warptide",1,"Reconnaissance"],["Blood Legion",2,"Purge the Foe"],["Legion of Excess",2,"Priority Assets"],["Plague Legion",2,"Take and Hold"],["Scintillating Legion",2,"Priority Assets"],["Shadow Legion",2,"Purge the Foe"],["Daemonic Incursion",3,"Disruption"]],
+  "Chaos Knights": [["Bastions of Tyranny",1,"Disruption"],["Hunting Warpack",1,"Reconnaissance"],["Iconoclast Fiefdom",1,"Take and Hold"],["Helhunt Lance",2,"Disruption"],["Houndpack Lance",2,"Reconnaissance"],["Lords of Dread",2,"Priority Assets"],["Traitoris Lance",2,"Purge the Foe"],["Infernal Lance",3,"Purge the Foe"]],
+  "Chaos Space Marines": [["Cabal of Chaos",1,"Disruption"],["Devotees of Destruction",1,"Priority Assets"],["Murdertalon Raiders",1,"Purge the Foe"],["Chaos Cult",2,"Priority Assets"],["Cult of the Arkifane",2,"Priority Assets"],["Deceptors",2,"Disruption"],["Dread Talons",2,"Disruption"],["Fellhammer Siege-host",2,"Take and Hold"],["Nightmare Hunt",2,"Disruption"],["Renegade Warband",2,"Priority Assets"],["Soulforged Warpack",2,"Purge the Foe"],["Veterans of the Long War",2,"Take and Hold"],["Warpstrike Champions",2,"Disruption"],["Creations of Bile",3,"Purge the Foe"],["Huron's Marauders",3,"Disruption"],["Pactbound Zealots",3,"Priority Assets"],["Renegade Raiders",3,"Reconnaissance"]],
+  "Dark Angels": [["Dark Age Arsenal",1,"Priority Assets"],["Darkflight Pursuit",1,"Reconnaissance"],["Interrogation Conclave",1,"Purge the Foe"],["Company of Hunters",2,"Disruption"],["Inner Circle Task Force",2,"Priority Assets"],["Lion's Blade Task Force",2,"Purge the Foe"],["Unforgiven Task Force",2,"Take and Hold"],["Wrath of the Rock",3,"Priority Assets"]],
+  "Death Guard": [["Contagion Engines",1,"Purge the Foe"],["Flyblown Host",1,"Reconnaissance"],["Paragons of Putrescence",1,"Priority Assets"],["Champions of Contagion",2,"Take and Hold"],["Death Lord's Chosen",2,"Priority Assets"],["Mortarion's Hammer",2,"Purge the Foe"],["Shamblerot Vectorium",2,"Disruption"],["Tallyband Summoners",2,"Disruption"],["Virulent Vectorium",3,"Take and Hold"]],
+  "Deathwatch": [["Black Spear Task Force",3,"Priority Assets"]],
+  "Drukhari": [["Exhibition of Slaughter",1,"Disruption"],["Kabalite Agonysts",1,"Purge the Foe"],["Tools of Torment",1,"Take and Hold"],["Covenite Coterie",2,"Purge the Foe"],["Kabalite Cartel",2,"Disruption"],["Realspace Raiders",2,"Priority Assets"],["Skysplinter Assault",2,"Reconnaissance"],["Spectacle of Spite",2,"Purge the Foe"],["Reaper's Wager",3,"Purge the Foe"]],
+  "Emperor's Children": [["Elegant Brutes",1,"Take and Hold"],["Frenzied Host",1,"Disruption"],["Spectacle of Slaughter",1,"Purge the Foe"],["Carnival of Excess",2,"Priority Assets"],["Court of the Phoenician",2,"Purge the Foe"],["Mercurial Host",2,"Reconnaissance"],["Peerless Bladesmen",2,"Priority Assets"],["Rapid Evisceration",2,"Disruption"],["Slaanesh's Chosen",2,"Purge the Foe"],["Coterie of the Conceited",3,"Purge the Foe"]],
+  "Genestealer Cults": [["Heroes of the Uprising",1,"Purge the Foe"],["Purestrain Broodswarm",1,"Priority Assets"],["Xenocult Masses",1,"Disruption"],["Biosanctic Broodsurge",2,"Take and Hold"],["Brood Brothers Auxilia",2,"Take and Hold"],["Final Day",2,"Purge the Foe"],["Outlander Claw",2,"Reconnaissance"],["Xenocreed Congregation",2,"Priority Assets"],["Host of Ascension",3,"Take and Hold"]],
+  "Grey Knights": [["Argent Assault",1,"Purge the Foe"],["Fires of Purgation",1,"Disruption"],["Immaterial Interdiction",1,"Priority Assets"],["Augurium Task Force",2,"Reconnaissance"],["Banishers",2,"Disruption"],["Brotherhood Strike",2,"Purge the Foe"],["Hallowed Conclave",2,"Take and Hold"],["Sanctic Spearhead",2,"Priority Assets"],["Warpbane Task Force",3,"Purge the Foe"]],
+  "Imperial Agents": [["Imperialis Fleet",3,"Disruption"],["Ordo Hereticus Purgation Force",3,"Priority Assets"],["Ordo Malleus Daemon Hunters",3,"Reconnaissance"],["Ordo Xenos Alien Hunters",3,"Purge the Foe"],["Veiled Blade Elimination Force",3,"Purge the Foe"]],
+  "Imperial Knights": [["Dominus Foebreakers",1,"Purge the Foe"],["Questor Forgepact",1,"Disruption"],["Throne-bonded Outriders",1,"Reconnaissance"],["Gate Warden Lance",2,"Priority Assets"],["Spearhead-at-arms",2,"Reconnaissance"],["Valourstrike Lance",2,"Purge the Foe"],["Freeblade Company",3,"Purge the Foe"],["Questoris Companions",3,"Take and Hold"]],
+  "Leagues of Votann": [["Armoured Trailblazers",1,"Disruption"],["Farseekers",1,"Reconnaissance"],["Hearthguard Covenant",1,"Priority Assets"],["Brandfast Oathband",2,"Take and Hold"],["Dêlve Assault Shift",2,"Purge the Foe"],["Hearthfyre Arsenal",2,"Priority Assets"],["Mercenary Oathband",2,"Take and Hold"],["Needgaârd Oathband",2,"Purge the Foe"],["Persecution Prospect",2,"Disruption"],["Hearthband",3,"Priority Assets"]],
+  "Necrons": [["Hand of the Dynasty",1,"Take and Hold"],["Skyshroud Spearhead",1,"Reconnaissance"],["The Phaeron's Armoury",1,"Priority Assets"],["Annihilation Legion",2,"Purge the Foe"],["Cryptek Conclave",2,"Priority Assets"],["Cursed Legion",2,"Purge the Foe"],["Hypercrypt Legion",2,"Reconnaissance"],["Obeisance Phalanx",2,"Disruption"],["Pantheon of Woe",2,"Purge the Foe"],["Awakened Dynasty",3,"Take and Hold"],["Canoptek Court",3,"Take and Hold"],["Starshatter Arsenal",3,"Priority Assets"]],
+  "Orks": [["More Dakka!",1,"Purge the Foe"],["Rollin' Deff",1,"Priority Assets"],["Taktikal Brigade",1,"Disruption"],["Blitz Brigade",2,"Reconnaissance"],["Bully Boyz",2,"Purge the Foe"],["Da Big Hunt",2,"Purge the Foe"],["Dread Mob",2,"Purge the Foe"],["Freebooter Krew",2,"Take and Hold"],["Green Tide",2,"Take and Hold"],["Kult of Speed",2,"Disruption"],["Speedwaaagh!",2,"Reconnaissance"],["War Horde",3,"Take and Hold"]],
+  "Space Marines": [["Fulguris Task Force",1,"Disruption"],["Librarius Conclave",1,"Reconnaissance"],["Subversion Assets",1,"Reconnaissance"],["1st Company Task Force",2,"Priority Assets"],["Anvil Siege Force",2,"Take and Hold"],["Bastion Task Force",2,"Take and Hold"],["Emperor's Shield",2,"Priority Assets"],["Firestorm Assault Force",2,"Purge the Foe"],["Forgefather's Seekers",2,"Purge the Foe"],["Hammer of Avernii",2,"Priority Assets"],["Headhunter Task Force",2,"Priority Assets"],["Ironstorm Spearhead",2,"Purge the Foe"],["Orbital Assault Force",2,"Take and Hold"],["Reclamation Force",2,"Take and Hold"],["Shadowmark Talon",2,"Disruption"],["Spearpoint Task Force",2,"Disruption"],["Vanguard Spearhead",2,"Reconnaissance"],["Armoured Speartip",3,"Take and Hold"],["Blade of Ultramar",3,"Priority Assets"],["Ceramite Sentinels",3,"Take and Hold"],["Gladius Task Force",3,"Priority Assets"],["Stormlance Task Force",3,"Disruption"]],
+  "Space Wolves": [["Champions of Fenris",1,"Purge the Foe"],["Legends of Saga and Song",1,"Take and Hold"],["Veterans of the Fang",1,"Disruption"],["Saga of the Beastslayer",2,"Purge the Foe"],["Saga of the Bold",2,"Priority Assets"],["Saga of the Great Wolf",2,"Take and Hold"],["Saga of the Hunter",2,"Disruption"]],
+  "T'au Empire": [["Advanced Acquisition Cadre",1,"Reconnaissance"],["Auxiliary Cadre",1,"Disruption"],["Experimental Prototype Cadre",1,"Priority Assets"],["Kauyon",2,"Priority Assets"],["Kroot Hunting Pack",2,"Take and Hold"],["Retaliation Cadre",2,"Purge the Foe"],["Mont'ka",3,"Purge the Foe"]],
+  "Thousand Sons": [["Ritual of Regeneration",1,"Purge the Foe"],["Sekhetar Cohort",1,"Priority Assets"],["Servants of Change",1,"Reconnaissance"],["Changehost of Deceit",2,"Reconnaissance"],["Hexwarp Thrallband",2,"Take and Hold"],["Warpforged Cabal",2,"Disruption"],["Warpmeld Pact",2,"Purge the Foe"],["Grand Coven",3,"Priority Assets"],["Rubricae Phalanx",3,"Take and Hold"]],
+  "Tyranids": [["Ambush Predators",1,"Disruption"],["Talons of the Norn Queen",1,"Take and Hold"],["Warrior Bioform Onslaught",1,"Take and Hold"],["Assimilation Swarm",2,"Priority Assets"],["Crusher Stampede",2,"Purge the Foe"],["Synaptic Nexus",2,"Disruption"],["Unending Swarm",2,"Take and Hold"],["Vanguard Onslaught",2,"Reconnaissance"],["Invasion Fleet",3,"Take and Hold"],["Subterranean Assault",3,"Disruption"]],
+  "World Eaters": [["Brazen Engines",1,"Purge the Foe"],["Butchers of Khorne",1,"Disruption"],["Vessels of Wrath",1,"Priority Assets"],["Cult of Blood",2,"Priority Assets"],["Goretrack Onslaught",2,"Take and Hold"],["Khorne Daemonkin",2,"Reconnaissance"],["Possessed Slaughterband",2,"Purge the Foe"],["Berzerker Warband",3,"Purge the Foe"]]
+};
+
+const PILL_CLASS = {
+  "Take and Hold": "tah",
+  "Purge the Foe": "ptf",
+  "Disruption": "dis",
+  "Reconnaissance": "rec",
+  "Priority Assets": "pa"
+};
+
+const slug = s => s.toLowerCase().replace(/'/g, "").replace(/ /g, "-");
+const cardUrl = (disp, mission) =>
+  `https://gdmissions.app/assets/11th/primary-missions/${slug(disp)}/${slug(mission)}.png`;
+
+const factionSel = document.getElementById("faction");
+const yourSel = document.getElementById("your-disp");
+const oppSel = document.getElementById("opp-disp");
+const rowsEl = document.getElementById("detachment-rows");
+
+for (const f of Object.keys(FACTIONS)) {
+  factionSel.add(new Option(f, f));
+}
+for (const d of DISPOSITIONS) {
+  yourSel.add(new Option(d, d));
+  oppSel.add(new Option(d, d));
+}
+
+function renderTable() {
+  rowsEl.innerHTML = "";
+  for (const [name, dp, disp] of FACTIONS[factionSel.value]) {
+    const tr = document.createElement("tr");
+
+    const tdName = document.createElement("td");
+    tdName.textContent = name;
+    const tdDp = document.createElement("td");
+    tdDp.className = "dp";
+    tdDp.textContent = dp;
+    const tdDisp = document.createElement("td");
+    const pill = document.createElement("span");
+    pill.className = "pill " + PILL_CLASS[disp];
+    pill.textContent = disp;
+    tdDisp.appendChild(pill);
+
+    tr.append(tdName, tdDp, tdDisp);
+    tr.addEventListener("click", () => {
+      yourSel.value = disp;
+      renderMissions();
+    });
+    rowsEl.appendChild(tr);
+  }
+}
+
+function setCard(imgId, errId, nameId, disp, mission) {
+  document.getElementById(nameId).textContent = mission;
+  const img = document.getElementById(imgId);
+  const err = document.getElementById(errId);
+  img.style.display = "";
+  err.style.display = "none";
+  img.onerror = () => { img.style.display = "none"; err.style.display = "block"; };
+  img.src = cardUrl(disp, mission);
+}
+
+function renderMissions() {
+  const yours = yourSel.value;
+  const opp = oppSel.value;
+  const yourMission = MATRIX[yours][opp];
+  const oppMission = MATRIX[opp][yours];
+
+  const note = document.getElementById("matchup-note");
+  if (yours === opp) {
+    note.innerHTML = `Mirror matchup — both players play <strong></strong>`;
+    note.querySelector("strong").textContent = yourMission;
+  } else {
+    note.innerHTML = `<strong></strong> vs <strong></strong> — each player scores their own primary mission.`;
+    const strongs = note.querySelectorAll("strong");
+    strongs[0].textContent = yours;
+    strongs[1].textContent = opp;
+  }
+
+  setCard("your-mission-img", "your-img-error", "your-mission-name", yours, yourMission);
+  setCard("opp-mission-img", "opp-img-error", "opp-mission-name", opp, oppMission);
+}
+
+factionSel.addEventListener("change", renderTable);
+yourSel.addEventListener("change", renderMissions);
+oppSel.addEventListener("change", renderMissions);
+
+renderTable();
+renderMissions();
+</script>
+</body>
+</html>
