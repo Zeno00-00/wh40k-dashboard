@@ -123,6 +123,19 @@
     font-size: 1.1rem;
     color: var(--gold);
     margin-bottom: 10px;
+    min-height: 1.3em;
+  }
+  .mission-card .side-tag {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 7px;
+    margin-left: 8px;
+    vertical-align: middle;
+    white-space: nowrap;
   }
   .mission-card img {
     width: 100%;
@@ -133,6 +146,46 @@
     background: var(--panel-2);
     min-height: 120px;
   }
+
+  /* 3D flip — click a card to see the physical reverse side */
+  .flip {
+    perspective: 1400px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .flip-inner {
+    position: relative;
+    transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+  .flip.flipped .flip-inner { transform: rotateY(180deg); }
+  .face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .face-back {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
+  }
+  .flip:focus-visible {
+    outline: 2px solid var(--gold-dim);
+    outline-offset: 4px;
+    border-radius: 5px;
+  }
+  .mission-card.single-sided .flip { cursor: default; }
+  .flip-hint {
+    margin-top: 8px;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    user-select: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flip-inner { transition: none; }
+  }
+
   .mission-card .img-error {
     display: none;
     padding: 30px 10px;
@@ -237,16 +290,28 @@
 
       <div class="matchup-note" id="matchup-note"></div>
 
-      <div class="mission-card">
+      <div class="mission-card" id="your-card">
         <div class="who">Your Primary Mission</div>
         <div class="mission-name" id="your-mission-name"></div>
-        <img id="your-mission-img" alt="Your primary mission card">
+        <div class="flip" id="your-flip" role="button" tabindex="0" aria-label="Flip mission card to its reverse side">
+          <div class="flip-inner">
+            <div class="face face-front"><img id="your-mission-img" alt="Your primary mission card"></div>
+            <div class="face face-back"><img id="your-mission-img-back" alt="Reverse side of the mission card"></div>
+          </div>
+        </div>
+        <div class="flip-hint" id="your-flip-hint"></div>
         <div class="img-error" id="your-img-error">Card image unavailable</div>
       </div>
-      <div class="mission-card">
+      <div class="mission-card" id="opp-card">
         <div class="who">Opponent's Primary Mission</div>
         <div class="mission-name" id="opp-mission-name"></div>
-        <img id="opp-mission-img" alt="Opponent's primary mission card">
+        <div class="flip" id="opp-flip" role="button" tabindex="0" aria-label="Flip mission card to its reverse side">
+          <div class="flip-inner">
+            <div class="face face-front"><img id="opp-mission-img" alt="Opponent's primary mission card"></div>
+            <div class="face face-back"><img id="opp-mission-img-back" alt="Reverse side of the mission card"></div>
+          </div>
+        </div>
+        <div class="flip-hint" id="opp-flip-hint"></div>
         <div class="img-error" id="opp-img-error">Card image unavailable</div>
       </div>
     </div>
@@ -345,14 +410,90 @@ function renderTable() {
   }
 }
 
-function setCard(imgId, errId, nameId, disp, mission) {
-  document.getElementById(nameId).textContent = mission;
-  const img = document.getElementById(imgId);
-  const err = document.getElementById(errId);
-  img.style.display = "";
+// Each physical primary mission card is double-sided: the front is one player's
+// mission for a matchup, the back is the opposing player's mission for that same
+// matchup (the reverse-matrix lookup). Mirror matchups are identical on both
+// sides, so those cards have no distinct second side.
+const CARDS = {
+  your: { card: "your-card", flip: "your-flip", name: "your-mission-name", hint: "your-flip-hint", err: "your-img-error", front: "your-mission-img", back: "your-mission-img-back" },
+  opp:  { card: "opp-card",  flip: "opp-flip",  name: "opp-mission-name",  hint: "opp-flip-hint",  err: "opp-img-error",  front: "opp-mission-img",  back: "opp-mission-img-back" }
+};
+
+function nameWithTag(text, tag) {
+  const span = document.createElement("span");
+  span.textContent = text;
+  if (tag) {
+    const t = document.createElement("span");
+    t.className = "side-tag";
+    t.textContent = tag;
+    span.appendChild(t);
+  }
+  return span;
+}
+
+function setName(nameEl, text, tag) {
+  nameEl.replaceChildren(nameWithTag(text, tag));
+}
+
+function setCard(key, frontDisp, frontMission, backDisp, backMission) {
+  const c = CARDS[key];
+  const card = document.getElementById(c.card);
+  const flip = document.getElementById(c.flip);
+  const nameEl = document.getElementById(c.name);
+  const hint = document.getElementById(c.hint);
+  const err = document.getElementById(c.err);
+  const frontImg = document.getElementById(c.front);
+  const backImg = document.getElementById(c.back);
+
+  const singleSided = frontMission === backMission; // mirror matchup
+
+  // reset to the front side on every (re)render
+  flip.classList.remove("flipped");
+  flip.setAttribute("aria-pressed", "false");
+  card.classList.toggle("single-sided", singleSided);
+
+  // stash state for the flip toggle
+  flip.dataset.front = frontMission;
+  flip.dataset.back = backMission;
+  flip.dataset.single = singleSided ? "1" : "";
+
+  setName(nameEl, frontMission);
+  hint.textContent = singleSided ? "Same on both sides (mirror)" : "Tap to flip ⟳";
+
   err.style.display = "none";
-  img.onerror = () => { img.style.display = "none"; err.style.display = "block"; };
-  img.src = cardUrl(disp, mission);
+  flip.style.display = "";
+  frontImg.style.display = "";
+  frontImg.onerror = () => { flip.style.display = "none"; hint.style.display = "none"; err.style.display = "block"; };
+  frontImg.onload = () => { hint.style.display = ""; };
+  frontImg.src = cardUrl(frontDisp, frontMission);
+  backImg.onerror = () => { backImg.style.display = "none"; };
+  backImg.style.display = "";
+  backImg.src = cardUrl(backDisp, backMission);
+}
+
+function toggleFlip(key) {
+  const c = CARDS[key];
+  const flip = document.getElementById(c.flip);
+  if (flip.dataset.single) return; // mirror card — no distinct reverse
+  const nameEl = document.getElementById(c.name);
+  const hint = document.getElementById(c.hint);
+  const flipped = flip.classList.toggle("flipped");
+  flip.setAttribute("aria-pressed", flipped ? "true" : "false");
+  if (flipped) {
+    setName(nameEl, flip.dataset.back, "reverse");
+    hint.textContent = "Reverse side ⟲ tap to flip back";
+  } else {
+    setName(nameEl, flip.dataset.front);
+    hint.textContent = "Tap to flip ⟳";
+  }
+}
+
+for (const key of Object.keys(CARDS)) {
+  const flip = document.getElementById(CARDS[key].flip);
+  flip.addEventListener("click", () => toggleFlip(key));
+  flip.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFlip(key); }
+  });
 }
 
 function renderMissions() {
@@ -372,8 +513,9 @@ function renderMissions() {
     strongs[1].textContent = opp;
   }
 
-  setCard("your-mission-img", "your-img-error", "your-mission-name", yours, yourMission);
-  setCard("opp-mission-img", "opp-img-error", "opp-mission-name", opp, oppMission);
+  // front = this player's mission; back = the opposing mission for the same matchup
+  setCard("your", yours, yourMission, opp, oppMission);
+  setCard("opp", opp, oppMission, yours, yourMission);
 }
 
 factionSel.addEventListener("change", renderTable);
