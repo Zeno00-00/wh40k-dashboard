@@ -371,6 +371,17 @@ const PILL_CLASS = {
 const slug = s => s.toLowerCase().replace(/'/g, "").replace(/ /g, "-");
 const cardUrl = (disp, mission) =>
   `https://gdmissions.app/assets/11th/primary-missions/${slug(disp)}/${slug(mission)}.png`;
+const backUrl = (disp, mission) =>
+  `https://gdmissions.app/assets/11th/primary-missions/${slug(disp)}/${slug(mission)}-back.png`;
+
+// Missions whose card has a second side (an Objective Action). The other
+// missions are single-sided. The front is always the scoring side (1/2); the
+// back (2/2) details the mission's action.
+const HAS_BACK = new Set([
+  "Death Trap", "Smoke and Mirrors", "Locate and Deny",
+  "Triangulation", "Surveil the Foe", "Gather Intel",
+  "Secure Asset", "Vital Link", "Extract Relic", "Vanguard Operation", "Sabotage"
+]);
 
 const factionSel = document.getElementById("faction");
 const yourSel = document.getElementById("your-disp");
@@ -410,10 +421,9 @@ function renderTable() {
   }
 }
 
-// Each physical primary mission card is double-sided: the front is one player's
-// mission for a matchup, the back is the opposing player's mission for that same
-// matchup (the reverse-matrix lookup). Mirror matchups are identical on both
-// sides, so those cards have no distinct second side.
+// Each primary mission card has a scoring side (front, 1/2). Some also have a
+// second side (back, 2/2) detailing the mission's Objective Action — for those,
+// the card flips. Single-sided missions don't flip.
 const CARDS = {
   your: { card: "your-card", flip: "your-flip", name: "your-mission-name", hint: "your-flip-hint", err: "your-img-error", front: "your-mission-img", back: "your-mission-img-back" },
   opp:  { card: "opp-card",  flip: "opp-flip",  name: "opp-mission-name",  hint: "opp-flip-hint",  err: "opp-img-error",  front: "opp-mission-img",  back: "opp-mission-img-back" }
@@ -435,7 +445,7 @@ function setName(nameEl, text, tag) {
   nameEl.replaceChildren(nameWithTag(text, tag));
 }
 
-function setCard(key, frontDisp, frontMission, backDisp, backMission) {
+function setCard(key, disp, mission) {
   const c = CARDS[key];
   const card = document.getElementById(c.card);
   const flip = document.getElementById(c.flip);
@@ -445,45 +455,54 @@ function setCard(key, frontDisp, frontMission, backDisp, backMission) {
   const frontImg = document.getElementById(c.front);
   const backImg = document.getElementById(c.back);
 
-  const singleSided = frontMission === backMission; // mirror matchup
+  const hasBack = HAS_BACK.has(mission);
 
-  // reset to the front side on every (re)render
+  // reset to the front (scoring) side on every (re)render
   flip.classList.remove("flipped");
   flip.setAttribute("aria-pressed", "false");
-  card.classList.toggle("single-sided", singleSided);
+  card.classList.toggle("single-sided", !hasBack);
+  flip.dataset.mission = mission;
+  flip.dataset.hasback = hasBack ? "1" : "";
 
-  // stash state for the flip toggle
-  flip.dataset.front = frontMission;
-  flip.dataset.back = backMission;
-  flip.dataset.single = singleSided ? "1" : "";
-
-  setName(nameEl, frontMission);
-  hint.textContent = singleSided ? "Same on both sides (mirror)" : "Tap to flip ⟳";
+  setName(nameEl, mission);
+  hint.textContent = hasBack ? "Tap to flip ⟳" : "Single-sided — no action";
 
   err.style.display = "none";
   flip.style.display = "";
   frontImg.style.display = "";
   frontImg.onerror = () => { flip.style.display = "none"; hint.style.display = "none"; err.style.display = "block"; };
   frontImg.onload = () => { hint.style.display = ""; };
-  frontImg.src = cardUrl(frontDisp, frontMission);
-  backImg.onerror = () => { backImg.style.display = "none"; };
-  backImg.style.display = "";
-  backImg.src = cardUrl(backDisp, backMission);
+  frontImg.src = cardUrl(disp, mission);
+
+  if (hasBack) {
+    backImg.style.display = "";
+    backImg.alt = mission + " — Objective Action (side 2/2)";
+    backImg.onerror = () => { // back unexpectedly missing — degrade to single-sided
+      card.classList.add("single-sided");
+      flip.dataset.hasback = "";
+      flip.classList.remove("flipped");
+      setName(nameEl, mission);
+      hint.textContent = "Single-sided — no action";
+    };
+    backImg.src = backUrl(disp, mission);
+  } else {
+    backImg.removeAttribute("src");
+  }
 }
 
 function toggleFlip(key) {
   const c = CARDS[key];
   const flip = document.getElementById(c.flip);
-  if (flip.dataset.single) return; // mirror card — no distinct reverse
+  if (!flip.dataset.hasback) return; // no second side
   const nameEl = document.getElementById(c.name);
   const hint = document.getElementById(c.hint);
   const flipped = flip.classList.toggle("flipped");
   flip.setAttribute("aria-pressed", flipped ? "true" : "false");
   if (flipped) {
-    setName(nameEl, flip.dataset.back, "reverse");
-    hint.textContent = "Reverse side ⟲ tap to flip back";
+    setName(nameEl, flip.dataset.mission, "action");
+    hint.textContent = "Action side (2/2) ⟲ tap to flip back";
   } else {
-    setName(nameEl, flip.dataset.front);
+    setName(nameEl, flip.dataset.mission);
     hint.textContent = "Tap to flip ⟳";
   }
 }
@@ -513,9 +532,9 @@ function renderMissions() {
     strongs[1].textContent = opp;
   }
 
-  // front = this player's mission; back = the opposing mission for the same matchup
-  setCard("your", yours, yourMission, opp, oppMission);
-  setCard("opp", opp, oppMission, yours, yourMission);
+  // each card flips to its own Objective Action side (if it has one)
+  setCard("your", yours, yourMission);
+  setCard("opp", opp, oppMission);
 }
 
 factionSel.addEventListener("change", renderTable);
